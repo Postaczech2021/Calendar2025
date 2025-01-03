@@ -24,6 +24,23 @@ def index():
         })
     return render_template('events.html', events=formatted_events)
 
+@app.route('/day/<int:day>/<int:month>/<int:year>')
+def day_events(day, month, year):
+    date = datetime(year, month, day)
+    events = Event.query.filter(db.func.date(Event.start_date) <= date, db.func.date(Event.end_date) >= date).all()
+    formatted_events = []
+    for event in events:
+        dates = event.get_dates_formatted()
+        formatted_events.append({
+            'id': event.id,
+            'name': event.name,
+            'description': event.description,
+            'start_date': dates['start_date'],
+            'end_date': dates['end_date'],
+            'category_id': event.category_id
+        })
+    return render_template('day_events.html', events=formatted_events, date=date.strftime('%d.%m.%Y'))
+
 @app.route('/add_event', methods=['GET', 'POST'])
 def add_event():
     if request.method == 'POST':
