@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Events{% endblock %}
+
+{% block content %}
+<h2 class="mt-4 mb-4">Events</h2>
+<a href="{{ url_for('add_event') }}" class="btn btn-primary mb-3">Add Event</a>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th>Category ID</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for event in events %}
+        <tr>
+            <td>{{ event.id }}</td>
+            <td>{{ event.name }}</td>
+            <td>{{ event.description }}</td>
+            <td>{{ event.start_date }}</td>
+            <td>{{ event.end_date }}</td>
+            <td>{{ event.category_id }}</td>
+            <td>
+                <a href="{{ url_for('edit_event', event_id=event.id) }}" class="btn btn-warning btn-sm">Edit</a>
+                <form method="post" action="{{ url_for('delete_event', event_id=event.id) }}" style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<a href="{{ url_for('categories') }}" class="btn btn-secondary">Manage Categories</a>
+{% endblock %}
