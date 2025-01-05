@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from models import db, Category, Event
 from datetime import datetime
 from cal import render_calendar
@@ -6,13 +6,61 @@ from cal import render_calendar
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
+app.config['SECRET_KEY'] = 'chhx7383827ciri38f8cicicjcifidiru'  # Nastavení tajného klíče pro session
 db.init_app(app)
 
 @app.route('/calendar/<int:year>/<int:month>')
 def calendar_view(year, month):
     return render_calendar(year, month)
+    
+@app.route('/add/work', methods=['GET', 'POST'])
+def add_work():
+    if request.method == 'POST':
+        try:
+            event_name = request.form['eventName']
+            date_range = request.form['dateRange']
+            print(f'Data z formuláře: Název: {event_name}, Rozsah dat: {date_range}')  # Ladící výpis
 
+            dates = date_range.split(',')
+            print(f'Hodnoty z formuláře: {dates}')  # Ladící výpis
+
+            work_category = Category.query.filter_by(name='Work').first()
+            if not work_category:
+                work_category = Category(name='Work')
+                db.session.add(work_category)
+                db.session.commit()
+                print(f'Vytvořena nová kategorie Work: {work_category.id}')  # Ladící výpis
+
+            for date in dates:
+                date = date.strip()  # Odstranění nadbytečných mezer kolem hodnoty
+                description = ''
+                if event_name == 'O':
+                    description = '14:00-22:15'
+                elif event_name == 'R':
+                    description = '05:45-14:00'
+                
+                new_event = Event(
+                    name=event_name,
+                    start_date=date, 
+                    end_date=date, 
+                    category_id=work_category.id, 
+                    description=description
+                )
+                db.session.add(new_event)
+                print(f'Přidána událost: {new_event}')  # Ladící výpis
+
+            db.session.commit()
+            print('Všechny události byly úspěšně uloženy.')  # Ladící výpis
+
+            # Flash messages for user
+            flash('Událost úspěšně přidána!', 'success')
+            return redirect(url_for('add_work'))
+        except Exception as e:
+            print(f'Chyba: {str(e)}')  # Ladící výpis
+            flash(f'Chyba při přidávání události: {str(e)}', 'danger')
+            return redirect(url_for('add_work'))
+    return render_template('add_work.html')
+            
 @app.route('/events')
 def index():
     events = Event.query.all()
