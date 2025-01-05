@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from flask import render_template_string, url_for
-from models import Event
+from models import Event, Category
 from calendar import HTMLCalendar, MONDAY
 
 # České názvy měsíců
@@ -16,10 +16,7 @@ class CustomHTMLCalendar(HTMLCalendar):
 
     def get_events_per_day(self):
         start_date = datetime(self.year, self.month, 1)
-        if self.month == 12:
-            end_date = datetime(self.year + 1, 1, 1)
-        else:
-            end_date = datetime(self.year, self.month + 1, 1)
+        end_date = datetime(self.year, self.month + 1, 1) if self.month < 12 else datetime(self.year + 1, 1, 1)
 
         events = Event.query.filter(Event.start_date < end_date, Event.end_date >= start_date).all()
         events_per_day = {}
@@ -28,25 +25,58 @@ class CustomHTMLCalendar(HTMLCalendar):
             event_end = min(event.end_date, end_date - timedelta(days=1))
             current_day = event_start.day
             while current_day <= event_end.day:
-                if current_day in events_per_day:
-                    events_per_day[current_day] += 1
-                else:
-                    events_per_day[current_day] = 1
+                if current_day not in events_per_day:
+                    events_per_day[current_day] = []
+                events_per_day[current_day].append(event)
                 current_day += 1
         return events_per_day
+
+    def get_event_bg_color(self, event):
+        category = Category.query.get(event.category_id)
+        if category and category.name == 'Work':
+            first_letter = event.name[0]
+            if first_letter == 'O':
+                return 'bg-purple'
+            elif first_letter == 'R':
+                return 'bg-danger'
+        return ''
 
     def formatday(self, day, weekday):
         if day == 0:
             return '<td></td>'  # Neplatný den
         else:
             bg_color = 'bg-success' if (self.year == self.today.year and self.month == self.today.month and day == self.today.day) else ''
-            events_count = self.events_per_day.get(day, 0)
-            events_info = f'<span class="badge bg-danger">{events_count}</span>' if events_count > 0 else ''
-            return f'<td class="{bg_color}"><a href="/day/{day}/{self.month}/{self.year}">{day} {events_info}</a></td>'
+            events = self.events_per_day.get(day, [])
+            events_info_top_right = ''
+            events_info_bottom_left = ''
+            work_bg_color = ''
+            work_border = ''
+            other_count = 0
+
+            for event in events:
+                category = Category.query.get(event.category_id)
+                if category:
+                    if category.name == 'Směny':
+                        first_letter = event.name[0]
+                        color = 'bg-primary' if first_letter == 'S' else ''
+                        color = 'bg-danger' if first_letter == 'R' else color
+                        color = 'bg-purple' if first_letter == 'O' else color
+                        if color:
+                            events_info_bottom_left += f'<span class="badge position-absolute bottom-0 start-0 {color}">{first_letter}</span>'
+                    elif category.name == 'Work':
+                        work_bg_color = self.get_event_bg_color(event)
+                        if work_bg_color:
+                            work_border = f'<div class="position-absolute bottom-0 start-0 w-100 {work_bg_color} border border-{work_bg_color}" style="height: 8px; z-index: 10; border:0 !important;margin:0;"></div>'
+                    else:
+                        other_count += 1
+
+            if other_count > 0:
+                events_info_top_right += f'<span class="badge bg-warning position-absolute top-0 end-0">{other_count}</span>'
+
+            return f'<td class="{bg_color} {work_bg_color} position-relative text-center"><a href="/day/{day}/{self.month}/{self.year}" class="text-decoration-none">{day}</a>{events_info_top_right}{events_info_bottom_left}{work_border}</td>'
 
     def formatmonth(self, withyear=True):
-        events = f'<table class="table table-bordered">\n'
-        events += f'{self.formatmonthname(self.year, self.month, withyear=withyear)}\n'
+        events = f'<table class="table table-bordered table-dark table-hover calendar-table">\n'
         events += f'{self.formatweekheader()}\n'
         for week in self.monthdays2calendar(self.year, self.month):
             events += '<tr>'
@@ -57,19 +87,21 @@ class CustomHTMLCalendar(HTMLCalendar):
         return events
 
     def formatmonthname(self, theyear, themonth, withyear=True):
-        month_name = MONTHS[themonth - 1]
-        return f'<tr><th colspan="7" class="text-center">{month_name} {theyear if withyear else ""}</th></tr>'
+        month_links = ''.join(f'<a href="/calendar/{theyear}/{i+1}" class="btn btn-dark btn-sm mx-1 month-link">{MONTHS[i][:3]}</a>' for i in range(12))
+        return f'<hr>{month_links}'
 
     def formatweekheader(self):
         headers = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
-        return '<tr>' + ''.join(f'<th>{header}</th>' for header in headers) + '</tr>'
+        return '<tr>' + ''.join(f'<th class="text-center">{header}</th>' for header in headers) + '</tr>'
 
 def generate_calendar(year, month):
     calendar = CustomHTMLCalendar(year, month)
     return calendar.formatmonth(withyear=True)
 
 def get_upcoming_events():
-    upcoming_events = (Event.query.order_by(Event.start_date.desc())
+    work_category_id = Category.query.filter_by(name='Work').first().id
+    upcoming_events = (Event.query.filter(Event.category_id != work_category_id)
+                       .order_by(Event.start_date.desc())
                        .limit(10)
                        .all())
 
@@ -79,6 +111,10 @@ def get_upcoming_events():
     events_html += '</ul>'
 
     return events_html
+
+def generate_month_links(year):
+    month_links = ''.join(f'<a href="/calendar/{year}/{i+1}" class="btn btn-dark btn-sm mx-1 month-link">{MONTHS[i][:3]}</a>' for i in range(12))
+    return month_links
 
 def render_calendar(year, month):
     calendar_html = generate_calendar(year, month)
@@ -95,16 +131,31 @@ def render_calendar(year, month):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" rel="stylesheet">
         <title>Kalendář</title>
+        <style>
+            .calendar-container {{ margin-top: 3px; }}
+            .calendar-table th, .calendar-table td {{ text-align: center; vertical-align: middle; }}
+            .calendar-table a {{ text-decoration: none; }}
+            .month-links a {{ font-size: 0.8rem; padding: 0.25rem 0.5rem; }}
+            .badge {{ border-radius: 0; }}
+            .bg-purple {{ background-color: purple; }}
+        </style>
     </head>
-    <body>
-        <div class="container">
+    <body class="bg-dark text-light">
+        <div class="container calendar-container">
             <div class="d-flex justify-content-between mb-3">
-                <a href="{url_for('calendar_view', year=prev_month.year, month=prev_month.month)}" class="btn btn-primary">Předchozí měsíc</a>
-                <h2>{MONTHS[month - 1]} {year}</h2>
-                <a href="{url_for('calendar_view', year=next_month.year, month=next_month.month)}" class="btn btn-primary">Následující měsíc</a>
+                <a href="{url_for('calendar_view', year=prev_month.year, month=prev_month.month)}" class="btn btn-primary"><i class="bi bi-arrow-left"></i></a>
+                <h2 class="text-center w-100">{MONTHS[month - 1]} {year}</h2>
+                <a href="{url_for('calendar_view', year=next_month.year, month=next_month.month)}" class="btn btn-primary"><i class="bi bi-arrow-right"></i></a>
             </div>
             {calendar_html}
+            <div class="text-center">
+                <hr>
+                <div class="month-links">
+                    {generate_month_links(year)}
+                </div>
+            </div>
             <h3>10 nejčerstvějších událostí</h3>
             {events_html}
         </div>
