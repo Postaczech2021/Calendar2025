@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 from models import db, Category, Event
 from datetime import datetime
+from cal import render_calendar
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
@@ -8,7 +9,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-@app.route('/')
+@app.route('/calendar/<int:year>/<int:month>')
+def calendar_view(year, month):
+    return render_calendar(year, month)
+
+@app.route('/events')
 def index():
     events = Event.query.all()
     formatted_events = []
@@ -25,21 +30,11 @@ def index():
     return render_template('events.html', events=formatted_events)
 
 @app.route('/day/<int:day>/<int:month>/<int:year>')
-def day_events(day, month, year):
+def day_view(day, month, year):
     date = datetime(year, month, day)
-    events = Event.query.filter(db.func.date(Event.start_date) <= date, db.func.date(Event.end_date) >= date).all()
-    formatted_events = []
-    for event in events:
-        dates = event.get_dates_formatted()
-        formatted_events.append({
-            'id': event.id,
-            'name': event.name,
-            'description': event.description,
-            'start_date': dates['start_date'],
-            'end_date': dates['end_date'],
-            'category_id': event.category_id
-        })
-    return render_template('day_events.html', events=formatted_events, date=date.strftime('%d.%m.%Y'))
+    events = Event.query.filter(Event.start_date <= date, Event.end_date >= date).all()
+
+    return render_template('day_events.html', day=day, month=month, year=year, events=events)
 
 @app.route('/add_event', methods=['GET', 'POST'])
 def add_event():
