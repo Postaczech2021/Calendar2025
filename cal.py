@@ -38,14 +38,14 @@ class CustomHTMLCalendar(HTMLCalendar):
             if first_letter == 'O':
                 return 'bg-purple'
             elif first_letter == 'R':
-                return 'bg-danger'
+                return 'border border-danger'
         return ''
 
     def formatday(self, day, weekday):
         if day == 0:
             return '<td></td>'  # Neplatný den
         else:
-            bg_color = 'bg-success' if (self.year == self.today.year and self.month == self.today.month and day == self.today.day) else ''
+            today_color = 'bg-success' if (self.year == self.today.year and self.month == self.today.month and day == self.today.day) else ''
             events = self.events_per_day.get(day, [])
             events_info_top_right = ''
             events_info_bottom_left = ''
@@ -59,21 +59,25 @@ class CustomHTMLCalendar(HTMLCalendar):
                     if category.name == 'Směny':
                         first_letter = event.name[0]
                         color = 'bg-primary' if first_letter == 'S' else ''
-                        color = 'bg-danger' if first_letter == 'R' else color
+                        color = 'border border-danger' if first_letter == 'R' else color
                         color = 'bg-purple' if first_letter == 'O' else color
                         if color:
                             events_info_bottom_left += f'<span class="badge position-absolute bottom-0 start-0 {color}">{first_letter}</span>'
                     elif category.name == 'Work':
-                        work_bg_color = self.get_event_bg_color(event)
-                        if work_bg_color:
-                            work_border = f'<div class="position-absolute bottom-0 start-0 w-100 {work_bg_color} border border-{work_bg_color}" style="height: 8px; z-index: 10; border:0 !important;margin:0;"></div>'
+                        if event.name == 'O':
+                            work_border = f'<div class="position-absolute bottom-0 start-0 w-100 bg-purple" style="height: 8px; z-index: 10; border:0 !important;margin:0;"></div>'
+                        elif event.name == 'R':
+                            work_border = f'<div class="position-absolute bottom-0 start-0 w-100 bg-danger" style="height: 8px; z-index: 10; border:0 !important;margin:0;"></div>'
                     else:
                         other_count += 1
 
-            if other_count > 0:
-                events_info_top_right += f'<span class="badge bg-warning position-absolute top-0 end-0">{other_count}</span>'
+            if not work_bg_color and not work_border:
+                work_border = f'<div class="position-absolute bottom-0 start-0 w-100 border border-success" style="height: 8px; z-index: 10; border:0 !important;margin:0;"></div>'
 
-            return f'<td class="{bg_color} {work_bg_color} position-relative text-center"><a href="/day/{day}/{self.month}/{self.year}" class="text-decoration-none">{day}</a>{events_info_top_right}{events_info_bottom_left}{work_border}</td>'
+            if other_count > 0:
+                events_info_top_right += f'<span class=" bg-warning position-absolute top-0 end-0" style="padding:2px;">{other_count}</span>'
+
+            return f'<td class="{today_color} position-relative text-center"><a href="/day/{day}/{self.month}/{self.year}" class="text-decoration-none {today_color}">{day}</a>{events_info_top_right}{events_info_bottom_left}{work_border}</td>'
 
     def formatmonth(self, withyear=True):
         events = f'<table class="table table-bordered table-dark table-hover calendar-table">\n'
@@ -88,7 +92,7 @@ class CustomHTMLCalendar(HTMLCalendar):
 
     def formatmonthname(self, theyear, themonth, withyear=True):
         month_links = ''.join(f'<a href="/calendar/{theyear}/{i+1}" class="btn btn-dark btn-sm mx-1 month-link">{MONTHS[i][:3]}</a>' for i in range(12))
-        return f'<hr>{month_links}'
+        return f'{month_links}'
 
     def formatweekheader(self):
         headers = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
@@ -119,7 +123,6 @@ def generate_month_links(year):
 def render_calendar(year, month):
     calendar_html = generate_calendar(year, month)
     events_html = get_upcoming_events()
-
     prev_month = datetime(year, month, 1) - timedelta(days=1)
     next_month = datetime(year, month, 28) + timedelta(days=4)
     next_month = next_month.replace(day=1)  # Nastav první den v následujícím měsíci
@@ -140,27 +143,33 @@ def render_calendar(year, month):
             .month-links a {{ font-size: 0.8rem; padding: 0.25rem 0.5rem; }}
             .badge {{ border-radius: 0; }}
             .bg-purple {{ background-color: purple; }}
+            .border-danger {{ border-color: red !important; }}
+            .border-success {{ border-color: green !important; }}
+            .bg-success a {{ color: black !important; }}
         </style>
     </head>
     <body class="bg-dark text-light">
-        <div class="container calendar-container">
+        <div class="mt-3 container calendar-container">
             <div class="d-flex justify-content-between mb-3">
                 <a href="{url_for('calendar_view', year=prev_month.year, month=prev_month.month)}" class="btn btn-primary"><i class="bi bi-arrow-left"></i></a>
                 <h2 class="text-center w-100">{MONTHS[month - 1]} {year}</h2>
                 <a href="{url_for('calendar_view', year=next_month.year, month=next_month.month)}" class="btn btn-primary"><i class="bi bi-arrow-right"></i></a>
             </div>
-            {calendar_html}
+           <div class="mt-3"> {calendar_html}</div>
+
             <div class="text-center">
-                <hr>
+                
                 <div class="month-links">
                     {generate_month_links(year)}
                 </div>
             </div>
-            <h3>10 nejčerstvějších událostí</h3>
+            <h3 class="mt-5">Události</h3>
+            <hr>
             {events_html}
         </div>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    </body>
-    </html>
-    '''
+        <script src="https://cdn.jsdelivr.net[43dcd9a7-70db-4a1f-b0ae-981daa162054](https://github.com/EmanoelPequeno/PHP/tree/988720fa95a4ad228b92648429876fa9df309cc4/API%2FQuestao09%2FCadastro.php?citationMarker=43dcd9a7-70db-4a1f-b0ae-981daa162054 "1")[43dcd9a7-70db-4a1f-b0ae-981daa162054](https://github.com/krishnadheerajp/krishnadheerajp.github.io/tree/0e41803e74609647f6b1c76c9c162c40777b523e/GRIP%20%20Internship%2Ftransfer.php?citationMarker=43dcd9a7-70db-4a1f-b0ae-981daa162054 "2")
+
+        </body>
+            </html>
+            '''
     return render_template_string(html)
